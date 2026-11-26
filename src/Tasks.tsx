@@ -4,8 +4,8 @@ import { db } from "./firebase";
 import { fmt, today, useCollection, useMembers } from "./data";
 import { email, useSession } from "./session";
 
-type Repeat = { every: number; unit: "day" | "week" | "month" } | null;
-type Task = { title: string; assignee: string; due: string; done: boolean; repeat: Repeat };
+export type Repeat = { every: number; unit: "day" | "week" | "month" } | null;
+export type Task = { title: string; assignee: string; due: string; done: boolean; repeat: Repeat };
 
 const PRESETS: Record<string, { label: string; r: Repeat }> = {
   none: { label: "Bez powtarzania", r: null },
@@ -16,7 +16,7 @@ const PRESETS: Record<string, { label: string; r: Repeat }> = {
   m3: { label: "Co 3 miesiące", r: { every: 3, unit: "month" } },
   m12: { label: "Co rok", r: { every: 12, unit: "month" } },
 };
-const repeatLabel = (r: Repeat) =>
+export const repeatLabel = (r: Repeat) =>
   r ? Object.values(PRESETS).find((p) => p.r && p.r.every === r.every && p.r.unit === r.unit)?.label ?? "" : "";
 
 // k-ty termin po dacie bazowej (liczony od bazy, więc 31 stycznia nie dryfuje do 28).
@@ -36,7 +36,7 @@ function nextDue(due: string, r: NonNullable<Repeat>) {
   while (fmt(stepFrom(base, r, k)) <= today()) k++;
   return fmt(stepFrom(base, r, k));
 }
-function dueInfo(due: string) {
+export function dueInfo(due: string) {
   if (!due) return { text: "", late: false };
   const diff = Math.round((new Date(due + "T12:00:00").getTime() - new Date(today() + "T12:00:00").getTime()) / 86400000);
   const [, m, d] = due.split("-");
@@ -44,6 +44,12 @@ function dueInfo(due: string) {
   if (diff === 1) return { text: "Jutro", late: false };
   if (diff === -1) return { text: "Wczoraj", late: true };
   return diff < 0 ? { text: `Po terminie: ${d}.${m}`, late: true } : { text: `${d}.${m}`, late: false };
+}
+
+export function completeTask(t: Task & { id: string }, myId: string) {
+  const ref = doc(db, "tasks", t.id);
+  if (t.repeat) return updateDoc(ref, { due: nextDue(t.due, t.repeat), lastDoneAt: serverTimestamp(), lastDoneBy: myId });
+  return updateDoc(ref, { done: true, doneAt: serverTimestamp(), doneBy: myId });
 }
 
 export default function Tasks() {
@@ -71,11 +77,7 @@ export default function Tasks() {
     setTitle(""); setDue(""); setRep("none"); setAssignee(""); setOpen(false);
   }
 
-  function complete(t: Task & { id: string }) {
-    const ref = doc(db, "tasks", t.id);
-    if (t.repeat) return updateDoc(ref, { due: nextDue(t.due, t.repeat), lastDoneAt: serverTimestamp(), lastDoneBy: myId });
-    return updateDoc(ref, { done: true, doneAt: serverTimestamp(), doneBy: myId });
-  }
+  const complete = (t: Task & { id: string }) => completeTask(t, myId);
   const remove = (t: Task & { id: string }) =>
     confirm(`Usunąć „${t.title}”?`) && deleteDoc(doc(db, "tasks", t.id));
 

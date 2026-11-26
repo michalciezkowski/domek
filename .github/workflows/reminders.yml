@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "run = normalnie, test = wyślij testowe powiadomienie"
+        description: "run = normalnie, test = testowy push, sync = odśwież Kalendarz Google"
         type: choice
-        options: [run, test]
+        options: [run, test, sync]
         default: run
 
 concurrency:

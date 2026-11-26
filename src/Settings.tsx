@@ -3,6 +3,7 @@ import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 
 import { db } from "./firebase";
 import { email, logout, Member, useSession } from "./session";
 import { disablePush, enablePush, pushEnabledHere, pushSupported, setPref, usePrefs } from "./push";
+import { CalSource, useCalendarFeed, useCalendarSettings } from "./calendarData";
 
 const PALETTE = ["#0f766e", "#c2410c", "#4338ca", "#be185d", "#4d7c0f", "#a16207", "#0369a1"];
 
@@ -61,12 +62,102 @@ export default function Settings() {
           {err && <p className="err" role="alert">{err}</p>}
         </form>
       </section>
+      <CalendarSettings />
       <Push />
       <section>
         <h2>Konto</h2>
         <button className="btn" onClick={logout}>Wyloguj się</button>
       </section>
     </>
+  );
+}
+
+function CalendarSettings() {
+  const cfg = useCalendarSettings();
+  const feed = useCalendarFeed();
+  const [calId, setCalId] = useState("");
+  const [calName, setCalName] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState("");
+
+  const sources = cfg.sources ?? [];
+
+  function addCalendar(e: FormEvent) {
+    e.preventDefault();
+    setErr("");
+    const id = calId.trim();
+    if (!id.includes("@")) return setErr("Wklej poprawne ID kalendarza (np. ...@group.calendar.google.com lub adres Gmail).");
+    if (sources.some((s) => s.id.toLowerCase() === id.toLowerCase())) return setErr("Ten kalendarz jest już na liście.");
+    const next: CalSource[] = [
+      ...sources,
+      {
+        id,
+        name: calName.trim() || "Kalendarz",
+        color: PALETTE[sources.length % PALETTE.length],
+      },
+    ];
+    setDoc(doc(db, "settings", "calendar"), { sources: next }, { merge: true })
+      .catch(() => setErr("Nie udało się zapisać kalendarza."));
+    setCalId("");
+    setCalName("");
+  }
+
+  function removeCalendar(id: string, label: string) {
+    if (!confirm(`Odpiąć kalendarz „${label}”?`)) return;
+    const next = sources.filter((s) => s.id !== id);
+    setDoc(doc(db, "settings", "calendar"), { sources: next }, { merge: true });
+  }
+
+  async function copyServiceEmail() {
+    if (!cfg.serviceEmail) return;
+    try {
+      await navigator.clipboard.writeText(cfg.serviceEmail);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { /* brak clipboard API */ }
+  }
+
+  return (
+    <section>
+      <h2>Kalendarz Google</h2>
+      <p className="help-text">
+        W Google Calendar (na komputerze: <i>Ustawienia i udostępnianie</i> wybranego kalendarza) udostępnij go do odczytu poniższemu adresowi konta usługi, a następnie wklej jego <b>Identyfikator kalendarza</b> poniżej.
+      </p>
+
+      {cfg.serviceEmail ? (
+        <div className="copy-box">
+          <code>{cfg.serviceEmail}</code>
+          <button type="button" className="btn small" onClick={copyServiceEmail}>
+            {copied ? "Skopiowano ✓" : "Kopiuj"}
+          </button>
+        </div>
+      ) : (
+        <p className="empty-inline">Adres konta usługi pojawi się tutaj automatycznie po pierwszym przebiegu crona.</p>
+      )}
+
+      {sources.length > 0 && (
+        <ul className="list">
+          {sources.map((s) => (
+            <li key={s.id}>
+              <span className="dot" style={{ background: s.color }} />
+              <span className="grow">
+                <b>{s.name}</b>
+                <small>{s.id}</small>
+                {feed.errors[s.id] && <small className="late">{feed.errors[s.id]}</small>}
+              </span>
+              <button className="btn small" onClick={() => removeCalendar(s.id, s.name)}>Usuń</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form onSubmit={addCalendar} className="form">
+        <input placeholder="Nazwa (np. Rodzinny, Szkoła)" value={calName} onChange={(e) => setCalName(e.target.value)} />
+        <input placeholder="ID kalendarza (...group.calendar.google.com lub Gmail)" value={calId} onChange={(e) => setCalId(e.target.value)} required />
+        <button className="btn primary">Dodaj kalendarz</button>
+        {err && <p className="err" role="alert">{err}</p>}
+      </form>
+    </section>
   );
 }
 

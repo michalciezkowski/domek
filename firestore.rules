@@ -22,7 +22,7 @@ service cloud.firestore {
     // Dane domu: dostęp tylko dla członków.
     match /{col}/{doc=**} {
       allow read, write: if isMember() && col in [
-        'settings', 'shopping', 'tasks', 'deadlines',
+        'settings', 'shopping', 'tasks', 'calendar', 'deadlines',
         'pantry', 'notes', 'recipes', 'mealplan'
       ];
     }

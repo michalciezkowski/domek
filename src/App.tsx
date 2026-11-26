@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { login, logout, useSession } from "./session";
+import Calendar from "./Calendar";
 import Settings from "./Settings";
 import Shopping from "./Shopping";
 import Tasks from "./Tasks";
+import Today from "./Today";
 import { syncPush } from "./push";
 import "./stage2.css";
 import "./stage3.css";
+import "./stage4.css";
 
 const TABS = [
-  { id: "today", label: "Dziś", hint: "Wydarzenia, Twoje zadania, terminy i obiad pojawią się tutaj (etap 4)." },
+  { id: "today", label: "Dziś", hint: "" },
   { id: "shopping", label: "Zakupy", hint: "" },
   { id: "tasks", label: "Zadania", hint: "" },
-  { id: "calendar", label: "Kalendarz", hint: "Wydarzenia z Kalendarza Google (etap 4)." },
+  { id: "calendar", label: "Kalendarz", hint: "" },
   { id: "food", label: "Jedzenie", hint: "Przepisy i plan posiłków (etap 6)." },
   { id: "more", label: "Więcej", hint: "" },
 ] as const;
@@ -65,9 +68,11 @@ export default function App() {
         <span className="me" style={{ background: s.member.color }}>{s.member.name.slice(0, 1)}</span>
       </header>
       <main className="main">
-        {tab === "more" ? <Settings />
+        {tab === "today" ? <Today onNavigate={go} />
           : tab === "shopping" ? <Shopping />
           : tab === "tasks" ? <Tasks />
+          : tab === "calendar" ? <Calendar onNavigate={go} />
+          : tab === "more" ? <Settings />
           : <p className="empty">{current.hint}</p>}
       </main>
       <nav className="tabs" aria-label="Główna nawigacja">

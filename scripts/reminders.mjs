@@ -1,8 +1,9 @@
 // Uruchamiany z GitHub Actions co ~10 min (.github/workflows/reminders.yml).
-// MODE=run (domyślnie) | test (wyślij testowe powiadomienie na wszystkie zarejestrowane telefony)
+// MODE=run (domyślnie) | test (testowe powiadomienie) | sync (natychmiastowa synchronizacja Kalendarza Google)
 import { cert, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import { syncCalendars } from "./gcal.mjs";
 import { DAY, hasWork, plan, quiet, warsawNow } from "./lib.mjs";
 
 const mode = process.env.MODE || "run";
@@ -55,6 +56,20 @@ if (mode === "test") {
   const messages = Object.keys(devices).map((to) => ({ to, title: "Domek", body: "Test powiadomień działa.", tag: "test", tab: "" }));
   await deliver(messages, devices);
   process.exit(0);
+}
+
+if (mode === "sync") {
+  const cal = await syncCalendars(db, account, { force: true });
+  console.log("Kalendarz (sync):", JSON.stringify(cal));
+  process.exit(0);
+}
+
+// Synchronizacja Kalendarza Google (co ~30 min lub od razu po zmianie listy kalendarzy w Ustawieniach).
+try {
+  const cal = await syncCalendars(db, account, { force: false });
+  if (cal.synced) console.log(`Kalendarz: wydarzeń=${cal.eventsCount}, błędów=${cal.errorsCount}`);
+} catch (err) {
+  console.warn("Kalendarz błąd:", err?.message ?? err);
 }
 
 // Odczyty są filtrowane, żeby zmieścić się w darmowym limicie Spark (50 tys. odczytów/dzień).
