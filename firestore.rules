@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // Członek = zalogowany przez Google z potwierdzonym mailem,
+    // którego adres istnieje jako ID dokumentu w members/.
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function isMember() {
+      return signedIn()
+        && exists(/databases/$(db)/documents/members/$(request.auth.token.email));
+    }
+
+    // Każdy zalogowany może sprawdzić tylko SWÓJ wpis (bramka członkostwa).
+    // Członkowie widzą i zarządzają wszystkimi (brak ról).
+    match /members/{email} {
+      allow get: if isMember() || (signedIn() && request.auth.token.email == email);
+      allow list, create, update, delete: if isMember();
+    }
+
+    // Dane domu: dostęp tylko dla członków.
+    match /{col}/{doc=**} {
+      allow read, write: if isMember() && col in [
+        'settings', 'shopping', 'tasks', 'deadlines',
+        'pantry', 'notes', 'recipes', 'mealplan'
+      ];
+    }
+
+    // Urządzenia push (tokeny FCM + preferencje powiadomień): każdy tylko swoje.
+    // Cron (Admin SDK) omija reguły i czyta wszystko.
+    match /devices/{email} {
+      allow read, write: if isMember() && request.auth.token.email == email;
+    }
+
+    // Dane prywatne (v2: treningi, nawyki, klucz Garmin): tylko właściciel.
+    match /users/{uid}/private/{doc=**} {
+      allow read, write: if isMember() && request.auth.uid == uid;
+    }
+  }
+}

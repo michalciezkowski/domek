@@ -1,0 +1,24 @@
+name: Keepalive
+
+# GitHub wyłącza zaplanowane workflowy w repo bez aktywności przez 60 dni.
+# Raz w tygodniu włączamy oba workflowy ponownie (to odnawia licznik).
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          for wf in reminders.yml keepalive.yml; do
+            gh api -X PUT "repos/$REPO/actions/workflows/$wf/enable"
+          done

@@ -1,0 +1,20 @@
+textarea, select { font: inherit; padding: 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); min-height: 48px; width: 100%; }
+.form.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.wide { width: 100%; margin-bottom: 14px; }
+.bar { display: flex; justify-content: space-between; align-items: center; margin: 14px 0; color: var(--muted); }
+.row { flex: 1; display: flex; align-items: center; gap: 14px; background: none; border: 0; color: inherit;
+  font: inherit; text-align: left; padding: 6px 0; min-height: 48px; cursor: pointer; }
+.row small { display: block; color: var(--muted); }
+.row small.late { color: var(--danger); font-weight: 600; }
+.check { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--accent); flex: none;
+  display: grid; place-items: center; color: var(--accent-ink); font-weight: 700; }
+.check.on { background: var(--accent); }
+.struck { text-decoration: line-through; color: var(--muted); }
+.chips { display: flex; gap: 8px; margin-bottom: 14px; }
+.chips button { font: inherit; min-height: 40px; padding: 0 16px; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.store .row { min-height: 64px; font-size: 1.2rem; }
+.store .check { width: 36px; height: 36px; }
+details { margin-top: 18px; } summary { cursor: pointer; color: var(--muted); padding: 8px 0; }

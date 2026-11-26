@@ -1,0 +1,36 @@
+name: Przypomnienia
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub potrafi opóźniać o kilkanaście minut – to normalne
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run = normalnie, test = wyślij testowe powiadomienie"
+        type: choice
+        options: [run, test]
+        default: run
+
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - run: npm ci --prefix scripts --no-audit --no-fund
+      - run: node scripts/reminders.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          MODE: ${{ inputs.mode || 'run' }}

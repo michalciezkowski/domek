@@ -1,0 +1,4 @@
+.catsel { flex: none; width: 44%; min-height: 40px; padding: 6px 8px; font-size: .9rem; }
+.toggle { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; }
+.toggle input { width: 22px; height: 22px; min-height: 0; padding: 0; flex: none; accent-color: var(--accent); }
+section .btn + .btn, section p + .btn { margin-top: 10px; }
