@@ -24,3 +24,8 @@
 .copy-box code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
 .sync-meta { color: var(--muted); font-size: .82rem; text-align: center; margin: 18px 0 4px; }
 .list small.late { color: var(--danger); }
+.check-btn { background: none; border: 0; padding: 6px; margin: -6px; cursor: pointer;
+  display: grid; place-items: center; border-radius: 50%; flex: none; color: inherit; }
+.check-btn:disabled { opacity: .35; cursor: not-allowed; }
+.task-body { padding: 4px 0; }
+.task-body small.late { color: var(--danger); font-weight: 600; }

@@ -92,13 +92,20 @@ export default function Today({ onNavigate }: { onNavigate: (tab: NavTarget) => 
               const meta = [di.text, rl].filter(Boolean).join(", ");
               return (
                 <li key={t.id}>
-                  <button className="row" role="checkbox" aria-checked={false} onClick={() => completeTask(t, myId)}>
+                  <button
+                    type="button"
+                    className="check-btn"
+                    role="checkbox"
+                    aria-checked={false}
+                    aria-label={`Oznacz jako zrobione: ${t.title}`}
+                    onClick={() => completeTask(t, myId)}
+                  >
                     <span className="check" aria-hidden />
-                    <span className="grow">
-                      {t.title}
-                      {meta && <small className={di.late ? "late" : ""}>{meta}</small>}
-                    </span>
                   </button>
+                  <span className="task-body grow">
+                    {t.title}
+                    {meta && <small className={di.late ? "late" : ""}>{meta}</small>}
+                  </span>
                 </li>
               );
             })}

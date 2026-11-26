@@ -3,9 +3,17 @@ import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from "
 import { db } from "./firebase";
 import { fmt, today, useCollection, useMembers } from "./data";
 import { email, useSession } from "./session";
+import { canCompleteTask, canDeleteTask } from "./taskRules";
 
 export type Repeat = { every: number; unit: "day" | "week" | "month" } | null;
-export type Task = { title: string; assignee: string; due: string; done: boolean; repeat: Repeat };
+export type Task = {
+  title: string;
+  assignee: string;
+  due: string;
+  done: boolean;
+  repeat: Repeat;
+  createdBy?: string;
+};
 
 const PRESETS: Record<string, { label: string; r: Repeat }> = {
   none: { label: "Bez powtarzania", r: null },
@@ -47,6 +55,7 @@ export function dueInfo(due: string) {
 }
 
 export function completeTask(t: Task & { id: string }, myId: string) {
+  if (!canCompleteTask(t, myId)) return;
   const ref = doc(db, "tasks", t.id);
   if (t.repeat) return updateDoc(ref, { due: nextDue(t.due, t.repeat), lastDoneAt: serverTimestamp(), lastDoneBy: myId });
   return updateDoc(ref, { done: true, doneAt: serverTimestamp(), doneBy: myId });
@@ -79,7 +88,7 @@ export default function Tasks() {
 
   const complete = (t: Task & { id: string }) => completeTask(t, myId);
   const remove = (t: Task & { id: string }) =>
-    confirm(`Usunąć „${t.title}”?`) && deleteDoc(doc(db, "tasks", t.id));
+    canDeleteTask(t, myId) && confirm(`Usunąć „${t.title}”?`) && deleteDoc(doc(db, "tasks", t.id));
 
   const active = tasks.filter((t) => !t.done && (!mine || t.assignee === myId || !t.assignee))
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || a.title.localeCompare(b.title, "pl"));
@@ -113,19 +122,32 @@ export default function Tasks() {
       <ul className="list">
         {active.map((t) => {
           const di = dueInfo(t.due), p = who(t.assignee), rl = repeatLabel(t.repeat);
+          const canDone = canCompleteTask(t, myId);
+          const canDel = canDeleteTask(t, myId);
           return (
             <li key={t.id}>
-              <button className="row" role="checkbox" aria-checked={false} onClick={() => complete(t)}>
+              <button
+                type="button"
+                className="check-btn"
+                role="checkbox"
+                aria-checked={false}
+                aria-label={`Oznacz jako zrobione: ${t.title}`}
+                disabled={!canDone}
+                title={canDone ? "Oznacz jako zrobione" : `Przypisane do: ${p?.name ?? t.assignee}`}
+                onClick={() => complete(t)}
+              >
                 <span className="check" aria-hidden />
-                <span className="grow">
-                  {t.title}
-                  <small className={di.late ? "late" : ""}>
-                    {[di.text, rl, !mine && p ? p.name : ""].filter(Boolean).join(", ")}
-                  </small>
-                </span>
               </button>
+              <span className="task-body grow">
+                {t.title}
+                <small className={di.late ? "late" : ""}>
+                  {[di.text, rl, !mine && p ? p.name : ""].filter(Boolean).join(", ")}
+                </small>
+              </span>
               {p && <span className="dot" style={{ background: p.color }} title={p.name} />}
-              <button className="btn small" aria-label={`Usuń ${t.title}`} onClick={() => remove(t)}>×</button>
+              {canDel && (
+                <button className="btn small" aria-label={`Usuń ${t.title}`} onClick={() => remove(t)}>×</button>
+              )}
             </li>
           );
         })}
@@ -135,15 +157,29 @@ export default function Tasks() {
         <details>
           <summary>Zrobione ({done.length})</summary>
           <ul className="list">
-            {done.map((t) => (
-              <li key={t.id}>
-                <button className="row" role="checkbox" aria-checked onClick={() => updateDoc(doc(db, "tasks", t.id), { done: false })}>
-                  <span className="check on" aria-hidden>✓</span>
-                  <span className="grow struck">{t.title}</span>
-                </button>
-                <button className="btn small" aria-label={`Usuń ${t.title}`} onClick={() => remove(t)}>×</button>
-              </li>
-            ))}
+            {done.map((t) => {
+              const canDone = canCompleteTask(t, myId);
+              const canDel = canDeleteTask(t, myId);
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    className="check-btn"
+                    role="checkbox"
+                    aria-checked={true}
+                    aria-label={`Przywróć zadanie: ${t.title}`}
+                    disabled={!canDone}
+                    onClick={() => canDone && updateDoc(doc(db, "tasks", t.id), { done: false })}
+                  >
+                    <span className="check on" aria-hidden>✓</span>
+                  </button>
+                  <span className="task-body grow struck">{t.title}</span>
+                  {canDel && (
+                    <button className="btn small" aria-label={`Usuń ${t.title}`} onClick={() => remove(t)}>×</button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </details>
       )}

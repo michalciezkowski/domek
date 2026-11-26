@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
-export type Member = { name: string; color: string };
+export type Member = { name: string; color: string; admin?: boolean };
 type State =
   | { status: "loading" }
   | { status: "signedOut" }
@@ -24,9 +24,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
+    const ref = doc(db, "members", email(user));
     return onSnapshot(
-      doc(db, "members", email(user)),
-      (s) => setMember(s.exists() ? (s.data() as Member) : null),
+      ref,
+      (s) => {
+        if (!s.exists()) return setMember(null);
+        const raw = s.data() as Member & { createdAt?: unknown };
+        // Konto założyciela utworzone ręcznie w Etapie 1 nie ma pola createdAt -> automatyczna flaga admin.
+        const isAdmin = raw.admin === true || !("createdAt" in raw);
+        if (isAdmin && raw.admin !== true) {
+          setDoc(ref, { admin: true }, { merge: true }).catch(() => {});
+        }
+        setMember({ name: raw.name, color: raw.color, admin: isAdmin });
+      },
       () => setMember(null)
     );
   }, [user]);

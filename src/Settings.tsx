@@ -21,6 +21,7 @@ export default function Settings() {
   );
   if (s.status !== "member") return null;
   const myId = email(s.user);
+  const isAdmin = s.member.admin === true;
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -40,29 +41,33 @@ export default function Settings() {
 
   return (
     <>
-      <section>
-        <h2>Domownicy</h2>
-        <ul className="list">
-          {members.map((m) => (
-            <li key={m.id}>
-              <span className="dot" style={{ background: m.color }} />
-              <span className="grow"><b>{m.name}</b><small>{m.id}</small></span>
-              {m.id !== myId && (
-                <button className="btn small" onClick={() => confirm(`Usunąć ${m.name}?`) && deleteDoc(doc(db, "members", m.id))}>
-                  Usuń
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={add} className="form">
-          <input placeholder="Imię" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Adres Gmail" type="email" value={mail} onChange={(e) => setMail(e.target.value)} required />
-          <button className="btn primary">Dodaj domownika</button>
-          {err && <p className="err" role="alert">{err}</p>}
-        </form>
-      </section>
-      <CalendarSettings />
+      {isAdmin && (
+        <>
+          <section>
+            <h2>Domownicy</h2>
+            <ul className="list">
+              {members.map((m) => (
+                <li key={m.id}>
+                  <span className="dot" style={{ background: m.color }} />
+                  <span className="grow"><b>{m.name}</b><small>{m.id}</small></span>
+                  {m.id !== myId && (
+                    <button className="btn small" onClick={() => confirm(`Usunąć ${m.name}?`) && deleteDoc(doc(db, "members", m.id))}>
+                      Usuń
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={add} className="form">
+              <input placeholder="Imię" value={name} onChange={(e) => setName(e.target.value)} />
+              <input placeholder="Adres Gmail" type="email" value={mail} onChange={(e) => setMail(e.target.value)} required />
+              <button className="btn primary">Dodaj domownika</button>
+              {err && <p className="err" role="alert">{err}</p>}
+            </form>
+          </section>
+          <CalendarSettings />
+        </>
+      )}
       <Push />
       <section>
         <h2>Konto</h2>

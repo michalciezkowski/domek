@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { catKey, guess } from "../src/categories.ts";
+import { canCompleteTask, canDeleteTask } from "../src/taskRules.ts";
 import { clip, hasWork, plan, quiet, warsawNow } from "../scripts/lib.mjs";
 import { minusOneDay, normalizeEvents, sortEvents } from "../scripts/gcal.mjs";
 
@@ -119,5 +120,15 @@ describe("scripts/gcal.mjs – normalizacja wydarzeń Google Calendar", () => {
     assert.equal(sorted[1].endTime, "17:15");
     assert.equal(sorted[2].title, "Wieczór planszówek");
     assert.equal(sorted[2].endDate, "2026-11-26"); // koniec o 00:00 nie przechodzi na kolejny dzień
+  });
+});
+
+describe("taskRules.ts – uprawnienia usuwania i zamykania zadań", () => {
+  it("pozwala zamknąć zadanie tylko osobie przypisanej, a usunąć tylko autorowi", () => {
+    const task = { createdBy: "michal@example.com", assignee: "anna@example.com" };
+    assert.equal(canDeleteTask(task, "michal@example.com"), true);
+    assert.equal(canDeleteTask(task, "anna@example.com"), false);
+    assert.equal(canCompleteTask(task, "anna@example.com"), true);
+    assert.equal(canCompleteTask(task, "michal@example.com"), false);
   });
 });

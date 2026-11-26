@@ -11,29 +11,65 @@ service cloud.firestore {
       return signedIn()
         && exists(/databases/$(db)/documents/members/$(request.auth.token.email));
     }
-
-    // Każdy zalogowany może sprawdzić tylko SWÓJ wpis (bramka członkostwa).
-    // Członkowie widzą i zarządzają wszystkimi (brak ról).
-    match /members/{email} {
-      allow get: if isMember() || (signedIn() && request.auth.token.email == email);
-      allow list, create, update, delete: if isMember();
+    // Właściciel = konto z flagą admin: true (lub pierwotny wpis założyciela z Etapu 1 bez pola createdAt).
+    function isAdmin() {
+      return isMember()
+        && (
+          get(/databases/$(db)/documents/members/$(request.auth.token.email)).data.get('admin', false) == true
+          || !('createdAt' in get(/databases/$(db)/documents/members/$(request.auth.token.email)).data)
+        );
     }
 
-    // Dane domu: dostęp tylko dla członków.
+    // Każdy zalogowany może sprawdzić swój wpis (bramka członkostwa).
+    // Członkowie widzą listę domowników (imiona i kolory w zadaniach), ale zarządza nimi wyłącznie właściciel.
+    match /members/{email} {
+      allow get: if isMember() || (signedIn() && request.auth.token.email == email);
+      allow list: if isMember();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        && (email != request.auth.token.email || request.resource.data.get('admin', false) == true);
+    }
+
+    // Ustawienia globalne: kalendarzem zarządza właściciel; poprawki kategorii zakupów mogą zapisywać wszyscy.
+    match /settings/calendar {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+    match /settings/{docId} {
+      allow read, write: if isMember() && docId != 'calendar';
+    }
+
+    // Zsynchronizowany Kalendarz Google: odczyt dla domowników (zapis wykonuje cron Admin SDK).
+    match /calendar/{docId} {
+      allow read: if isMember();
+    }
+
+    // Zadania: tworzy członek (jako siebie), zamyka przypisana osoba, usuwa wyłącznie autor zadania.
+    match /tasks/{taskId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.get('createdBy', '') == request.auth.token.email;
+      allow update: if isMember()
+        && (resource.data.get('assignee', '') == request.auth.token.email
+            || resource.data.get('assignee', '') == '')
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '');
+      allow delete: if isMember()
+        && resource.data.get('createdBy', '') == request.auth.token.email;
+    }
+
+    // Pozostałe wspólne kolekcje domu: dostęp dla członków.
     match /{col}/{doc=**} {
       allow read, write: if isMember() && col in [
-        'settings', 'shopping', 'tasks', 'calendar', 'deadlines',
-        'pantry', 'notes', 'recipes', 'mealplan'
+        'shopping', 'deadlines', 'pantry', 'notes', 'recipes', 'mealplan'
       ];
     }
 
     // Urządzenia push (tokeny FCM + preferencje powiadomień): każdy tylko swoje.
-    // Cron (Admin SDK) omija reguły i czyta wszystko.
     match /devices/{email} {
       allow read, write: if isMember() && request.auth.token.email == email;
     }
 
-    // Dane prywatne (v2: treningi, nawyki, klucz Garmin): tylko właściciel.
+    // Dane prywatne (v2: treningi, nawyki, klucz Garmin): tylko właściciel konta.
     match /users/{uid}/private/{doc=**} {
       allow read, write: if isMember() && request.auth.uid == uid;
     }
