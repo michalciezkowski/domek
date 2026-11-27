@@ -1,0 +1,14 @@
+.me-btn { border: 0; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.me-btn.active { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+.dl-item { align-items: flex-start; flex-wrap: wrap; }
+.dl-item .dot { margin-top: 6px; }
+.dl-title { font-weight: 600; }
+.dl-note { margin-top: 2px; }
+.dl-actions { display: flex; gap: 6px; align-items: center; flex: none; margin-left: auto; }
+.search-input { width: 100%; margin-bottom: 14px; }
+.notes-grid { display: grid; gap: 12px; }
+.note-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.note-card.pinned { border-color: var(--accent); }
+.note-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.note-head h2 { font-size: 1.05rem; margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: 4px; }
+.note-body { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font-size: .95rem; }

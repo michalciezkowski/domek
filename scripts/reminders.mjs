@@ -4,7 +4,7 @@ import { cert, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { syncCalendars } from "./gcal.mjs";
-import { DAY, hasWork, plan, quiet, warsawNow } from "./lib.mjs";
+import { addDaysYmd, DAY, hasWork, plan, quiet, warsawNow } from "./lib.mjs";
 
 const mode = process.env.MODE || "run";
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -73,29 +73,35 @@ try {
 }
 
 // Odczyty są filtrowane, żeby zmieścić się w darmowym limicie Spark (50 tys. odczytów/dzień).
-const [shopSnap, taskSnap] = await Promise.all([
+const horizon14 = addDaysYmd(now.date, 14);
+const [shopSnap, taskSnap, dlSnap] = await Promise.all([
   db.collection("shopping").where("notified", "==", false).get(),
   db.collection("tasks").where("done", "==", false).get(),
+  db.collection("deadlines").where("due", "<=", horizon14).get(),
 ]);
 const shopping = shopSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 const tasks = taskSnap.docs.map((d) => {
   const v = d.data();
   return { id: d.id, ...v, createdMs: v.createdAt?.toMillis?.() ?? 0 };
 });
+const deadlines = dlSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-if (hasWork(shopping, tasks, now.date)) {
+if (hasWork(shopping, tasks, now.date, deadlines)) {
   const devices = await loadDevices();
   const names = {};
   (await db.collection("members").get()).forEach((d) => { names[d.id] = d.data().name; });
-  const { messages, shoppingIds, taskPatches } = plan({ shopping, tasks, devices, names, today: now.date, nowMs: Date.now() });
+  const { messages, shoppingIds, taskPatches, deadlinePatches } = plan({
+    shopping, tasks, deadlines, devices, names, today: now.date, nowMs: Date.now(),
+  });
   await deliver(messages, devices);
   const writes = [
     ...shoppingIds.map((id) => db.collection("shopping").doc(id).update({ notified: true })),
     ...taskPatches.map(({ id, patch }) => db.collection("tasks").doc(id).update(patch)),
+    ...deadlinePatches.map(({ id, patch }) => db.collection("deadlines").doc(id).update(patch)),
   ];
   // update (nie set): usunięty w międzyczasie dokument nie może się odtworzyć.
   await Promise.allSettled(writes);
-  console.log(`Zakupy: ${shoppingIds.length}, zadania: ${taskPatches.length}, wiadomości: ${messages.length}`);
+  console.log(`Zakupy: ${shoppingIds.length}, zadania: ${taskPatches.length}, terminy: ${deadlinePatches.length}, wiadomości: ${messages.length}`);
 } else {
   console.log("Nic do wysłania.");
 }

@@ -12,11 +12,37 @@ export function warsawNow(date = new Date()) {
 }
 export const quiet = (hour) => hour < 7 || hour >= 22; // cisza nocna: nic nie wysyłamy
 
+export function addDaysYmd(ymd, delta) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta, 12, 0, 0)).toISOString().slice(0, 10);
+}
+
+export function daysBetween(fromYmd, toYmd) {
+  const [y1, m1, d1] = fromYmd.split("-").map(Number);
+  const [y2, m2, d2] = toYmd.split("-").map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / DAY);
+}
+
+// Dwa progi powiadomień dla Terminów dokumentów/umów: <= 14 dni oraz <= 3 dni przed wygaśnięciem.
+export function deadlineStage(d, today) {
+  if (!d?.due) return null;
+  const left = daysBetween(today, d.due);
+  if (left <= 3) return `${d.due}:3`;
+  if (left <= 14) return `${d.due}:14`;
+  return null;
+}
+
 const wants = (dev, key) => !!dev && dev.prefs?.[key] !== false;
 export const isNewTask = (t) => t.notified !== true && !!t.assignee && t.assignee !== t.createdBy;
 export const isDue = (t, today) => !!t.due && t.due <= today && t.remindedFor !== t.due && !!t.assignee;
-export const hasWork = (shopping, tasks, today) =>
-  shopping.length > 0 || tasks.some((t) => t.notified !== true || isDue(t, today));
+export const isDeadlineDue = (d, today) => {
+  const stage = deadlineStage(d, today);
+  return !!stage && d.remindedStage !== stage;
+};
+export const hasWork = (shopping, tasks, today, deadlines = []) =>
+  shopping.length > 0
+  || tasks.some((t) => t.notified !== true || isDue(t, today))
+  || deadlines.some((d) => isDeadlineDue(d, today));
 
 // "a, b, c" skrócone do ~max znaków, z "+N" na końcu.
 export function clip(items, max = 110) {
@@ -29,9 +55,16 @@ export function clip(items, max = 110) {
   return items.length > used ? `${out} +${items.length - used}` : out;
 }
 
-// shopping: nowe pozycje (notified=false); tasks: aktywne zadania;
+function deadlineTimeWord(left) {
+  if (left < 0) return "po terminie";
+  if (left === 0) return "dziś";
+  if (left === 1) return "jutro";
+  return `za ${left} dni`;
+}
+
+// shopping: nowe pozycje (notified=false); tasks: aktywne zadania; deadlines: bliskie terminy;
 // devices: { email: { tokens, prefs } }; names: { email: imię }.
-export function plan({ shopping, tasks, devices, names, today, nowMs }) {
+export function plan({ shopping, tasks, deadlines = [], devices, names, today, nowMs }) {
   const name = (e) => names[e] || String(e).split("@")[0];
   const messages = [];
   const send = (to, key, m) => { if (wants(devices[to], key)) messages.push({ to, ...m }); };
@@ -69,5 +102,21 @@ export function plan({ shopping, tasks, devices, names, today, nowMs }) {
     send(to, "tasks", { title: "Zadania", body, tag: "tasks-due", tab: "tasks" });
   }
 
-  return { messages, shoppingIds: shopping.map((i) => i.id), taskPatches };
+  // Terminy dokumentów/umów: <= 14 dni oraz <= 3 dni. Wspólne (brak owner) dostają wszyscy domownicy.
+  const dlBy = {}, deadlinePatches = [];
+  const allRecipients = Object.keys(devices);
+  for (const d of deadlines) {
+    const stage = deadlineStage(d, today);
+    if (!stage || d.remindedStage === stage) continue;
+    deadlinePatches.push({ id: d.id, patch: { remindedStage: stage } });
+    const left = daysBetween(today, d.due);
+    const label = `${d.title} (${deadlineTimeWord(left)})`;
+    const targets = d.owner ? [d.owner] : allRecipients;
+    for (const to of targets) (dlBy[to] ??= []).push(label);
+  }
+  for (const [to, list] of Object.entries(dlBy)) {
+    send(to, "tasks", { title: "Zbliżający się termin", body: clip(list, 100), tag: "deadlines", tab: "deadlines" });
+  }
+
+  return { messages, shoppingIds: shopping.map((i) => i.id), taskPatches, deadlinePatches };
 }

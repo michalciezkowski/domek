@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { today } from "./data";
+import { useSession } from "./session";
+import Deadlines from "./Deadlines";
 import {
   addDays,
   eventsForDay,
@@ -10,28 +12,95 @@ import {
 } from "./calendarData";
 
 const HORIZON_DAYS = 35;
+export type CalendarSubTab = "events" | "deadlines";
 
-export default function Calendar({ onNavigate }: { onNavigate: (tab: "more") => void }) {
+export default function Calendar({
+  initialSubTab = "events",
+  onSubTabChange,
+  onNavigate,
+}: {
+  initialSubTab?: CalendarSubTab;
+  onSubTabChange?: (sub: CalendarSubTab) => void;
+  onNavigate: (tab: "settings") => void;
+}) {
+  const s = useSession();
   const cfg = useCalendarSettings();
   const feed = useCalendarFeed();
+  const [sub, setSub] = useState<CalendarSubTab>(initialSubTab);
   const [calFilter, setCalFilter] = useState<string>("all");
 
+  useEffect(() => { setSub(initialSubTab); }, [initialSubTab]);
+
+  if (s.status !== "member") return null;
+  const isAdmin = s.member.admin === true;
   const sources = cfg.sources ?? [];
   const todayYmd = today();
 
-  if (sources.length === 0) {
-    return (
-      <div className="hint-box">
-        <p>Brak podpiętych kalendarzy Google. Dodaj wspólny kalendarz rodzinny w zakładce <b>Więcej</b>.</p>
-        <button className="btn primary" onClick={() => onNavigate("more")}>Przejdź do ustawień</button>
-      </div>
-    );
+  function switchSub(next: CalendarSubTab) {
+    setSub(next);
+    onSubTabChange?.(next);
   }
 
-  const errEntries = Object.entries(feed.errors);
+  return (
+    <>
+      <div className="chips" role="group" aria-label="Widok kalendarza i terminów">
+        <button aria-pressed={sub === "events"} onClick={() => switchSub("events")}>Wydarzenia</button>
+        <button aria-pressed={sub === "deadlines"} onClick={() => switchSub("deadlines")}>Terminy</button>
+      </div>
+
+      {sub === "deadlines" ? (
+        <Deadlines />
+      ) : sources.length === 0 ? (
+        <div className="hint-box">
+          <p>Brak podpiętych kalendarzy Google.</p>
+          {isAdmin && (
+            <button className="btn primary" onClick={() => onNavigate("settings")}>
+              Podłącz w Ustawieniach
+            </button>
+          )}
+        </div>
+      ) : (
+        <EventsAgenda
+          sources={sources}
+          events={feed.events}
+          errors={feed.errors}
+          updatedAtMs={feed.updatedAtMs}
+          calFilter={calFilter}
+          setCalFilter={setCalFilter}
+          todayYmd={todayYmd}
+          isAdmin={isAdmin}
+          onOpenSettings={() => onNavigate("settings")}
+        />
+      )}
+    </>
+  );
+}
+
+function EventsAgenda({
+  sources,
+  events,
+  errors,
+  updatedAtMs,
+  calFilter,
+  setCalFilter,
+  todayYmd,
+  isAdmin,
+  onOpenSettings,
+}: {
+  sources: { id: string; name: string; color: string }[];
+  events: ReturnType<typeof useCalendarFeed>["events"];
+  errors: Record<string, string>;
+  updatedAtMs: number;
+  calFilter: string;
+  setCalFilter: (v: string) => void;
+  todayYmd: string;
+  isAdmin: boolean;
+  onOpenSettings: () => void;
+}) {
+  const errEntries = Object.entries(errors);
   const filteredEvents = calFilter === "all"
-    ? feed.events
-    : feed.events.filter((e) => e.calId === calFilter);
+    ? events
+    : events.filter((e) => e.calId === calFilter);
 
   const days: string[] = [];
   for (let i = 0; i < HORIZON_DAYS; i++) {
@@ -39,9 +108,9 @@ export default function Calendar({ onNavigate }: { onNavigate: (tab: "more") => 
     if (eventsForDay(filteredEvents, d).length > 0) days.push(d);
   }
 
-  const syncLabel = feed.updatedAtMs
+  const syncLabel = updatedAtMs
     ? new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-        .format(new Date(feed.updatedAtMs))
+        .format(new Date(updatedAtMs))
     : "oczekuje na pierwszy przebieg crona (~10 min)";
 
   return (
@@ -57,14 +126,14 @@ export default function Calendar({ onNavigate }: { onNavigate: (tab: "more") => 
         </div>
       )}
 
-      {errEntries.length > 0 && (
+      {errEntries.length > 0 && isAdmin && (
         <div className="hint-box warn" role="alert">
           <p><b>Problem z synchronizacją kalendarza:</b></p>
           {errEntries.map(([id, msg]) => {
             const name = sources.find((s) => s.id === id)?.name ?? id;
             return <p key={id}><small><b>{name}:</b> {msg}</small></p>;
           })}
-          <button className="btn small" onClick={() => onNavigate("more")}>Sprawdź w Więcej</button>
+          <button className="btn small" onClick={onOpenSettings}>Sprawdź w Ustawieniach</button>
         </div>
       )}
 

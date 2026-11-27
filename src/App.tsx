@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { login, logout, useSession } from "./session";
-import Calendar from "./Calendar";
+import Calendar, { CalendarSubTab } from "./Calendar";
+import Notes from "./Notes";
 import Settings from "./Settings";
 import Shopping from "./Shopping";
 import Tasks from "./Tasks";
@@ -9,6 +10,7 @@ import { syncPush } from "./push";
 import "./stage2.css";
 import "./stage3.css";
 import "./stage4.css";
+import "./stage5.css";
 
 const TABS = [
   { id: "today", label: "Dziś", hint: "" },
@@ -16,24 +18,42 @@ const TABS = [
   { id: "tasks", label: "Zadania", hint: "" },
   { id: "calendar", label: "Kalendarz", hint: "" },
   { id: "food", label: "Jedzenie", hint: "Przepisy i plan posiłków (etap 6)." },
-  { id: "more", label: "Więcej", hint: "" },
+  { id: "notes", label: "Notatki", hint: "" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
-const fromHash = (): TabId => TABS.find((t) => t.id === location.hash.slice(1))?.id ?? "today";
+type BottomTabId = (typeof TABS)[number]["id"];
+type ViewId = BottomTabId | "settings";
+type RouteState = { view: ViewId; calSub: CalendarSubTab };
+
+function parseHash(): RouteState {
+  const h = location.hash.slice(1);
+  if (h === "settings" || h === "more") return { view: "settings", calSub: "events" };
+  if (h === "deadlines") return { view: "calendar", calSub: "deadlines" };
+  const found = TABS.find((t) => t.id === h)?.id ?? "today";
+  return { view: found, calSub: "events" };
+}
 
 export default function App() {
   const s = useSession();
-  const [tab, setTab] = useState<TabId>(fromHash);
+  const [route, setRoute] = useState<RouteState>(parseHash);
   const uid = s.status === "member" ? s.user.uid : "";
 
-  // Klik w powiadomienie otwiera /#shopping itd.
+  // Klik w powiadomienie otwiera /#shopping, /#tasks, /#deadlines itd.
   useEffect(() => {
-    const f = () => setTab(fromHash());
+    const f = () => setRoute(parseHash());
     addEventListener("hashchange", f);
     return () => removeEventListener("hashchange", f);
   }, []);
-  const go = (id: TabId) => { history.replaceState(null, "", "#" + id); setTab(id); };
+
+  const navigate = (target: ViewId | "deadlines") => {
+    if (target === "deadlines") {
+      history.replaceState(null, "", "#deadlines");
+      setRoute({ view: "calendar", calSub: "deadlines" });
+      return;
+    }
+    history.replaceState(null, "", "#" + target);
+    setRoute({ view: target, calSub: "events" });
+  };
 
   // Tokeny FCM się rotują: przy starcie odśwież token, jeśli powiadomienia są włączone na tym telefonie.
   useEffect(() => {
@@ -55,29 +75,53 @@ export default function App() {
     return (
       <Center>
         <h1 className="brand">Brak dostępu</h1>
-        <p>Konto <b>{s.user.email}</b> nie jest na liście domowników. Poproś kogoś z rodziny, żeby dodał ten adres w zakładce Więcej.</p>
+        <p>Konto <b>{s.user.email}</b> nie jest na liście domowników. Poproś właściciela domu o dopisanie tego adresu w Ustawieniach.</p>
         <button className="btn" onClick={logout}>Zaloguj się innym kontem</button>
       </Center>
     );
 
-  const current = TABS.find((t) => t.id === tab)!;
+  const heading = route.view === "settings"
+    ? "Ustawienia"
+    : TABS.find((t) => t.id === route.view)!.label;
+  const currentTab = TABS.find((t) => t.id === route.view);
+
   return (
     <div className="shell">
       <header className="top">
-        <h1>{current.label}</h1>
-        <span className="me" style={{ background: s.member.color }}>{s.member.name.slice(0, 1)}</span>
+        <h1>{heading}</h1>
+        <button
+          type="button"
+          className={"me me-btn" + (route.view === "settings" ? " active" : "")}
+          style={{ background: s.member.color }}
+          aria-label="Ustawienia i konto"
+          aria-pressed={route.view === "settings"}
+          title="Ustawienia i konto"
+          onClick={() => navigate(route.view === "settings" ? "today" : "settings")}
+        >
+          {s.member.name.slice(0, 1)}
+        </button>
       </header>
       <main className="main">
-        {tab === "today" ? <Today onNavigate={go} />
-          : tab === "shopping" ? <Shopping />
-          : tab === "tasks" ? <Tasks />
-          : tab === "calendar" ? <Calendar onNavigate={go} />
-          : tab === "more" ? <Settings />
-          : <p className="empty">{current.hint}</p>}
+        {route.view === "today" ? <Today onNavigate={navigate} />
+          : route.view === "shopping" ? <Shopping />
+          : route.view === "tasks" ? <Tasks />
+          : route.view === "calendar" ? (
+            <Calendar
+              initialSubTab={route.calSub}
+              onSubTabChange={(sub) => {
+                history.replaceState(null, "", sub === "deadlines" ? "#deadlines" : "#calendar");
+                setRoute({ view: "calendar", calSub: sub });
+              }}
+              onNavigate={navigate}
+            />
+          )
+          : route.view === "notes" ? <Notes />
+          : route.view === "settings" ? <Settings />
+          : <p className="empty">{currentTab?.hint}</p>}
       </main>
       <nav className="tabs" aria-label="Główna nawigacja">
         {TABS.map((t) => (
-          <button key={t.id} aria-current={t.id === tab} onClick={() => go(t.id)}>
+          <button key={t.id} aria-current={t.id === route.view} onClick={() => navigate(t.id)}>
             {t.label}
           </button>
         ))}

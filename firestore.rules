@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     // Każdy zalogowany może sprawdzić swój wpis (bramka członkostwa).
-    // Członkowie widzą listę domowników (imiona i kolory w zadaniach), ale zarządza nimi wyłącznie właściciel.
+    // Członkowie widzą listę domowników (imiona i kolory), ale zarządza nimi wyłącznie właściciel.
     match /members/{email} {
       allow get: if isMember() || (signedIn() && request.auth.token.email == email);
       allow list: if isMember();
@@ -57,10 +57,30 @@ service cloud.firestore {
         && resource.data.get('createdBy', '') == request.auth.token.email;
     }
 
+    // Terminy i Notatki: tworzą i aktualizują domownicy, usuwa wyłącznie autor wpisu.
+    match /deadlines/{docId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.get('createdBy', '') == request.auth.token.email;
+      allow update: if isMember()
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '');
+      allow delete: if isMember()
+        && resource.data.get('createdBy', '') == request.auth.token.email;
+    }
+    match /notes/{docId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.get('createdBy', '') == request.auth.token.email;
+      allow update: if isMember()
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '');
+      allow delete: if isMember()
+        && resource.data.get('createdBy', '') == request.auth.token.email;
+    }
+
     // Pozostałe wspólne kolekcje domu: dostęp dla członków.
     match /{col}/{doc=**} {
       allow read, write: if isMember() && col in [
-        'shopping', 'deadlines', 'pantry', 'notes', 'recipes', 'mealplan'
+        'shopping', 'recipes', 'mealplan'
       ];
     }
 

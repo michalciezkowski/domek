@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { catKey, guess } from "../src/categories.ts";
 import { canCompleteTask, canDeleteTask } from "../src/taskRules.ts";
+import { addYearsYmd, deadlineBadge } from "../src/deadlineUtils.ts";
 import { clip, hasWork, plan, quiet, warsawNow } from "../scripts/lib.mjs";
 import { minusOneDay, normalizeEvents, sortEvents } from "../scripts/gcal.mjs";
 
@@ -130,5 +131,37 @@ describe("taskRules.ts – uprawnienia usuwania i zamykania zadań", () => {
     assert.equal(canDeleteTask(task, "anna@example.com"), false);
     assert.equal(canCompleteTask(task, "anna@example.com"), true);
     assert.equal(canCompleteTask(task, "michal@example.com"), false);
+  });
+});
+
+describe("deadlineUtils.ts + lib.mjs – terminy dokumentów i przypomnienia", () => {
+  it("przedłuża datę o rok bez dryfu 29 lutego i formatuje pilność", () => {
+    assert.equal(addYearsYmd("2028-02-29", 1), "2029-02-28");
+    assert.equal(addYearsYmd("2026-11-27", 1), "2027-11-27");
+    assert.equal(deadlineBadge("2026-12-05", "2026-11-27").urgent, true);
+    assert.equal(deadlineBadge("2026-12-20", "2026-11-27").urgent, false);
+  });
+
+  it("wysyła przypomnienia o terminie na progu <=14 dni oraz ponownie <=3 dni", () => {
+    const devices = {
+      "anna@example.com": { tokens: ["t1"], prefs: { tasks: true } },
+      "jan@example.com": { tokens: ["t2"], prefs: { tasks: true } },
+    };
+    const dl14 = [{ id: "d1", title: "Polisa OC", due: "2026-12-10", owner: "" }];
+    assert.equal(hasWork([], [], "2026-11-27", dl14), true);
+
+    const r1 = plan({ shopping: [], tasks: [], deadlines: dl14, devices, names: {}, today: "2026-11-27", nowMs: 0 });
+    assert.equal(r1.messages.length, 2); // wspólny termin -> obaj domownicy
+    assert.equal(r1.messages[0].tab, "deadlines");
+    assert.deepEqual(r1.deadlinePatches, [{ id: "d1", patch: { remindedStage: "2026-12-10:14" } }]);
+
+    // Dzień później (12 dni przed) – nie wysyła ponownie na tym samym progu :14
+    const dlAlready14 = [{ id: "d1", title: "Polisa OC", due: "2026-12-10", owner: "", remindedStage: "2026-12-10:14" }];
+    assert.equal(hasWork([], [], "2026-11-28", dlAlready14), false);
+
+    // 3 dni przed – wchodzi w próg :3 i wysyła ostatnie ostrzeżenie
+    assert.equal(hasWork([], [], "2026-12-07", dlAlready14), true);
+    const r2 = plan({ shopping: [], tasks: [], deadlines: dlAlready14, devices, names: {}, today: "2026-12-07", nowMs: 0 });
+    assert.deepEqual(r2.deadlinePatches, [{ id: "d1", patch: { remindedStage: "2026-12-10:3" } }]);
   });
 });
